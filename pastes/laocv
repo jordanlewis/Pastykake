@@ -1,0 +1,105 @@
+diff
+Index: fix_asu_badge_postings.py
+===================================================================
+--- fix_asu_badge_postings.py	(revision 57414)
++++ fix_asu_badge_postings.py	(working copy)
+@@ -43,10 +43,12 @@
+ 	krs_curs.execute(section_sql)
+ 	return [ row['id'] for row in krs_curs.fetchall() ]
+ 
+-def get_unit_sections(krs_curs, unit_id):
+-	unit_section_sql = "SELECT id FROM sections WHERE unit_id = %s"
++def get_unit_sections_and_ecollege_course_ids(krs_curs, unit_id):
++	"""Returns a map from section_id to ecollege_course_id for all sections in
++	   the given unit_id."""
++	unit_section_sql = "SELECT id, ref_id FROM sections WHERE unit_id = %s AND ref_id IS NOT NULL"
+ 	krs_curs.execute(unit_section_sql, [unit_id])
+-	return [ row['id'] for row in krs_curs.fetchall() ]
++	return dict([(row['id'], row['ref_id'].split('-')[1]) for row in krs_curs.fetchall()])
+ 
+ def get_registrations_in_section(krs_curs, section_id):
+ 	reg_sql = "SELECT id FROM registrations WHERE section_id = %s"
+@@ -54,6 +56,12 @@
+ 	return [ row['id'] for row in krs_curs.fetchall() ]
+ 
+ 
++def get_active_ecollege_courses(curs):
++	active_course_sql = "SELECT ecollege_course_id from ecollege_courses where active=1"
++	curs.execute(active_course_sql, [])
++	return [ int(row['ecollege_course_id']) for row in curs.fetchall() ]
++
++
+ def post_grade_update(curs, user_id, enrollment_id, item_title, ecollege_sso_params, delete=False):
+ 	knewdle_info_sql = "\n".join([
+ 		"SELECT ukv_cid.value AS cid, ukv_uid.value AS uid, ec.integration_user",
+@@ -85,17 +93,22 @@
+ 			if formatting.decode_htmlentities(item['title']).lower() == item_title.lower():
+ 				if delete:
+ 					# delete improperly submitted grade
+-					logging.error("delete %s %s" % (row['uid'], item['id']))
+ 					ecollege_client.delete_user_grade(token, row['cid'], row['uid'], item['id'])
++					logging.warn("succeeded: deleted badge %s %s from ecollege" % (row['uid'], item['id']))
+ 				else:
+ 					# post new value for user's grade
+-					logging.error("add %s %s" % (row['uid'], item['id']))
+ 					ecollege_client.post_user_grade(token, row['cid'], row['uid'], item['id'], item['pointsPossible'])
++					logging.warn("succeded: added badge %s %s to ecollege" % (row['uid'], item['id']))
+ 				break
+ 		else:
+ 			logging.error("No custom item found like '%s' in course %s" % (item_title, row['cid']))
+ 	except ecollege_client.EcollegeHTTPError, e:
+-		logging.exception("ecollege call failed: %s" % e.read())
++		if delete and e.code == 404:
++			logging.info("swallowing 404")
++		elif not delete and e.code == 400:
++			logging.info("swallowing 400")
++		else:
++			logging.exception("ecollege call failed: %s" % e.read())
+ 
+ def fix_registration(curs, krs_curs, registration_id, ecollege_sso_params, blended=True):
+ 	sql = "\n".join([
+@@ -106,7 +119,8 @@
+ 		"  JOIN unit_package_type_states upts ON sps.unit_package_type_state_id = upts.id",
+ 		"  JOIN packages p ON sps.package_id = p.id",
+ 		"  JOIN package_types pe ON p.package_type_id = pe.id",
+-		"WHERE r.id = %%s AND pe.name = '%s'" % ('subject' if blended else 'course',),
++		"WHERE r.ref_id IS NOT NULL AND sb.ref_id IS NOT NULL AND",
++		"      r.id = %%s AND pe.name = '%s'" % ('subject' if blended else 'course',),
+ 	])
+ 
+ 	krs_curs.execute(sql, [registration_id])
+@@ -118,8 +132,8 @@
+ 			item_title = name_map[row['package_name']]
+ 		else:
+ 			continue
+-		logging.error(item_title)
+-		logging.error(row['package_state'])
++		logging.info(item_title)
++		logging.info(row['package_state'])
+ 		post_grade_update(curs, int(row['user_id']), int(row['enrollment_id']), item_title, ecollege_sso_params, delete=row['package_state'] != 'COMPLETED')
+ 
+ def main():
+@@ -147,12 +161,17 @@
+ 	sections = []
+ 
+ 	if options.fixall:
+-		for unit_id in BLENDED_UNIT_IDS:
+-			for section_id in get_unit_sections(krs_curs, unit_id):
+-				sections.append({"id": section_id, "readiness": False})
+-		for unit_id in READINESS_UNIT_IDS:
+-			for section_id in get_unit_sections(krs_curs, unit_id):
+-				sections.append({"id": section_id, "readiness": True})
++		active_ecollege_course_ids = get_active_ecollege_courses(curs)
++
++		def get_sections_from_units(unit_ids, readiness):
++			for unit_id in unit_ids:
++				for section_id, ecollege_course_id in get_unit_sections_and_ecollege_course_ids(krs_curs, unit_id).items():
++					if int(ecollege_course_id) in active_ecollege_course_ids:
++						sections.append({"id": section_id, "readiness": readiness})
++
++		get_sections_from_units(BLENDED_UNIT_IDS, False)
++		get_sections_from_units(READINESS_UNIT_IDS, True)
++
+ 	elif len(args) > 0:
+ 		for id in args:
+ 			sections.append({"id": int(id), "readiness": options.readiness})
