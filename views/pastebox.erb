@@ -1,0 +1,10 @@
+<form method="post" action="/make_paste">
+<textarea name="new_paste" cols="60" rows="20">
+<%=@paste_text%>
+</textarea>
+</br>
+<select name="filetype">
+<%=dropdown_options(@filetype)%>
+</select>
+<input type="submit" value="Paste" />
+</form>

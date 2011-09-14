@@ -1,0 +1,22 @@
+ruby
+get '/' do
+    [ 'todos', 'suggested' ].each { |key|
+        if session[key] == nil
+            session[key] = ""
+        end
+    }
+
+    @edit_display = "none"
+    @suggest_display = "block"
+    @suggestion = ""
+    if session['todos'].empty? or
+       session['todos'].split("\n").find_all{ |item| undone(item)}.empty?
+        @edit_display = "block"
+        @suggest_display = "none"
+    else
+        @unrendered_suggestion, @suggestion = random_item
+
+    end
+
+    haml :index
+end
