@@ -3,10 +3,55 @@
 <head>
 <style type="text/css">
 	a {text-decoration: underline; color: #00c;}
+	body .syntaxhighlighter .line { white-space: pre-wrap !important; /*wrap*/}
 </style>
 <title></title>
 <script type="text/javascript" src="/js/shCore.js"></script>
 <script type="text/javascript" src="/js/shAutoloader.js"></script>
+<script type="text/javascript" src="/js/jquery-1.6.4.min.js"></script>
+<script type="text/javascript">
+$(function(){
+	// Line wrap back
+	var shLineWrap = function(){
+			$('.syntaxhighlighter').each(function(){
+					// Fetch
+					var $sh = $(this),
+							$gutter = $sh.find('td.gutter'),
+							$code = $sh.find('td.code')
+					;
+					// Cycle through lines
+					$gutter.children('.line').each(function(i){
+							// Fetch
+							var $gutterLine = $(this),
+									$codeLine = $code.find('.line:nth-child('+(i+1)+')')
+							;
+							// Fetch height
+							var height = $codeLine.height()||0;
+							if ( !height ) {
+									height = 'auto';
+							}
+							else {
+									height = height += 'px';
+							}
+							// Copy height over
+							$gutterLine.height(height+' !important');
+							console.debug($gutterLine.height(), height, $gutterLine.text(), $codeLine);
+					});
+			});
+	};
+	// Line wrap back when syntax highlighter has done it's stuff
+	var shLineWrapWhenReady = function(){
+			if ( $('.syntaxhighlighter').length === 0 ) {
+					setTimeout(shLineWrapWhenReady,800);
+			}
+			else {
+					shLineWrap();
+			}
+	};
+	// Fire
+	shLineWrapWhenReady();
+});
+</script>
 
 <link rel="stylesheet" type="text/css" href="/css/shCore.css" />
 <link rel="stylesheet" type="text/css" href="/css/shThemeEclipse.css" />
