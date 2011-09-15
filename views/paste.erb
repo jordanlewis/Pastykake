@@ -3,7 +3,10 @@
 <head>
 <style type="text/css">
 	a {text-decoration: underline; color: #00c;}
-	body .syntaxhighlighter .line { white-space: pre-wrap !important; /*wrap*/}
+	body .syntaxhighlighter .line {
+		overflow: hidden !important; /* prevent extra scrolly on code body */
+		white-space: pre-wrap !important; /*wrap*/
+	}
 </style>
 <title></title>
 <script type="text/javascript" src="/js/shCore.js"></script>
